@@ -5,6 +5,8 @@ import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -12,6 +14,7 @@ public class ZDApplicationContext {
     private Class configClass;
     private ConcurrentHashMap<String, Object> singletonMap = new ConcurrentHashMap<>(); //存放单例Bean
     private ConcurrentHashMap<String, BeanDefinition> beanDefinitionMap = new ConcurrentHashMap<>(); //存放Bean定义
+    private List<BeanPostProcessor> beanPostProcessorList = new ArrayList<>();
 
     public ZDApplicationContext(Class configClass) {
         this.configClass = configClass;
@@ -48,6 +51,21 @@ public class ZDApplicationContext {
             // Aware回调扩展点
             if(instance instanceof BeanNameAware){
                 ((BeanNameAware)instance).setBeanName(beanName);
+            }
+
+            // BeanPostProcessor: postProcess
+            for(BeanPostProcessor beanPostProcessor : beanPostProcessorList){
+                instance = beanPostProcessor.postProcessInitialization(instance, beanName);
+            }
+
+            // 初始化
+            if(instance instanceof InitializingBean){
+                ((InitializingBean)instance).afterPropertiesSet();
+            }
+
+            // BeanPostProcessor: afterProcess
+            for(BeanPostProcessor beanPostProcessor : beanPostProcessorList){
+                instance = beanPostProcessor.afterProcessInitialization(instance, beanName);
             }
 
             return instance;
@@ -88,6 +106,11 @@ public class ZDApplicationContext {
                             // 对含有Component注解的类进行处理，当前类是一个Bean
                             // 解析类->生成该Bean的BeanDefinition
 
+                            if(BeanPostProcessor.class.isAssignableFrom(clazz)){
+                                BeanPostProcessor beanPostProcessor = (BeanPostProcessor) clazz.getDeclaredConstructor().newInstance();
+                                beanPostProcessorList.add(beanPostProcessor);
+                            }
+
                             Component component = clazz.getDeclaredAnnotation(Component.class);
                             String beanName = component.value();
                             Scope scopeAnnotation = clazz.getDeclaredAnnotation(Scope.class);
@@ -103,6 +126,14 @@ public class ZDApplicationContext {
                         }
 
                     } catch (ClassNotFoundException e) {
+                        e.printStackTrace();
+                    } catch (InvocationTargetException e) {
+                        e.printStackTrace();
+                    } catch (InstantiationException e) {
+                        e.printStackTrace();
+                    } catch (IllegalAccessException e) {
+                        e.printStackTrace();
+                    } catch (NoSuchMethodException e) {
                         e.printStackTrace();
                     }
                 }
