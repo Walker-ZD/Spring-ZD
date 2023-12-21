@@ -2,6 +2,7 @@ package com.spring;
 
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.util.Map;
@@ -20,19 +21,35 @@ public class ZDApplicationContext {
         scan(configClass);
 
         for(Map.Entry<String, BeanDefinition> entry : beanDefinitionMap.entrySet()){
+            String beanName = entry.getKey();
             BeanDefinition beanDefinition = entry.getValue();
             if(beanDefinition.getScope().equals("singleton")){   // 单例bean在Spring启动时初始化
-                Object bean = createBean(beanDefinition);
-                singletonMap.put(entry.getKey(), bean);
+                Object bean = createBean(beanName, beanDefinition);
+                singletonMap.put(beanName, bean);
             }
         }
 
     }
 
-    private Object createBean(BeanDefinition beanDefinition) {
+    private Object createBean(String beanName, BeanDefinition beanDefinition) {
         Class clazz = beanDefinition.getClazz();
         try {
             Object instance = clazz.getDeclaredConstructor().newInstance(); // 通过反射实例化bean
+
+            // 依赖注入
+            for(Field declaredField : clazz.getDeclaredFields()){
+                if(declaredField.isAnnotationPresent(AutoWeired.class)){
+                    Object bean = getBean(declaredField.getName());
+                    declaredField.setAccessible(true);
+                    declaredField.set(instance, bean);
+                }
+            }
+
+            // Aware回调扩展点
+            if(instance instanceof BeanNameAware){
+                ((BeanNameAware)instance).setBeanName(beanName);
+            }
+
             return instance;
         } catch (InstantiationException e) {
             e.printStackTrace();
@@ -102,7 +119,7 @@ public class ZDApplicationContext {
             if (beanDefinition.getScope().equals("singleton")) {
                 return singletonMap.get(beanName);
             } else {
-                return createBean(beanDefinition);
+                return createBean(beanName, beanDefinition);
             }
         } else {
             throw new NullPointerException();
