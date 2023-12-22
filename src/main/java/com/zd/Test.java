@@ -3,6 +3,7 @@ package com.zd;
 import com.spring.ZDApplicationContext;
 import com.zd.service.OrderService;
 import com.zd.service.UserService;
+import com.zd.service.UserServiceImpl;
 
 public class Test {
     public static void main(String[] args) {
